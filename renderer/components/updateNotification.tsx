@@ -110,9 +110,16 @@ export const UpdateNotification: React.FC = () => {
                 : 'Update Available'}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {isReadyToInstall 
-                ? 'A new version has been downloaded. Restart the application to apply the update.' 
-                : `A new version (${updateStatus?.data?.version || 'unknown'}) is available. Would you like to download it now?`}
+              {isReadyToInstall ? (
+                // When update is ready to install
+                'A new version has been downloaded. Restart the application to apply the update.'
+              ) : isDownloading ? (
+                // When update is currently downloading
+                'Downloading update... Please wait.'
+              ) : (
+                // Initial state when update is available but not downloading yet
+                `A new version (${updateStatus?.data?.version || 'unknown'}) is available. Would you like to download it now?`
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
 

@@ -16,7 +16,7 @@ export class UpdateManager {
     this.isProd = isProd
     
     // Don't auto download - we'll let users decide when to update
-    autoUpdater.autoDownload = false
+    autoUpdater.autoDownload = true;
     
     // Configure GitHub token for private repository access
       autoUpdater.setFeedURL({
@@ -26,7 +26,6 @@ export class UpdateManager {
         private: true,
         token: GH_TOKEN
       });
-    
     this.setupEventHandlers()
   }
 
