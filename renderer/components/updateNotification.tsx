@@ -35,7 +35,6 @@ export const UpdateNotification: React.FC = () => {
       setUpdateStatus(status);
 
       if (status.status === 'update-available') {
-        setShowDialog(true);
         setIsDownloading(false);
         setIsReadyToInstall(false);
       } else if (status.status === 'download-progress') {
