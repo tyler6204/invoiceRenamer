@@ -3,7 +3,6 @@ import { app, ipcMain, shell, BrowserWindow } from 'electron'
 import serve from 'electron-serve'
 import { createWindow, UpdateManager } from './helpers'
 import fs from 'fs'
-import { config } from 'dotenv';
 
 // Detect if we're in a packaged app (more reliable than NODE_ENV)
 const isPackaged = app.isPackaged
