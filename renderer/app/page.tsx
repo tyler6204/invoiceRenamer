@@ -9,7 +9,7 @@ import RenamingSettings, { RenamingSettings as RenamingSettingsType } from "@/co
 import AuthCheck from "@/components/authCheck";
 import { Results } from "@/functions/processFile/route";
 import { models } from "@/lib/models";
-
+import { UpdateNotification } from "@/components/updateNotification";
 // App state interface to centralize state management
 interface AppState {
     results: Results | null;
@@ -156,6 +156,7 @@ export default function HomePage() {
                     </main>
                 </div>
             </React.Fragment>
+            <UpdateNotification />
         </AuthCheck>
     );
 }

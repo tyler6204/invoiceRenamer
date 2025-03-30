@@ -1,5 +1,5 @@
 import { autoUpdater } from 'electron-updater'
-import { dialog, BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
 import { GH_TOKEN } from '../../renderer/lib/apiKeys'
 
 // Type for update event callbacks
@@ -38,21 +38,6 @@ export class UpdateManager {
     
     autoUpdater.on('update-available', (info) => {
       this.sendStatus('update-available', info)
-      
-      // Show a native dialog when an update is available
-      dialog.showMessageBox(this.mainWindow, {
-        type: 'info',
-        title: 'Update Available',
-        message: `A new version (${info.version}) is available.`,
-        detail: 'Would you like to download it now?',
-        buttons: ['Download', 'Later'],
-        defaultId: 0
-      }).then(({ response }) => {
-        if (response === 0) {
-          // User chose to download
-          this.downloadUpdate()
-        }
-      })
     })
     
     autoUpdater.on('update-not-available', () => {
@@ -69,21 +54,6 @@ export class UpdateManager {
     
     autoUpdater.on('update-downloaded', (info) => {
       this.sendStatus('update-downloaded', info)
-      
-      // Show a native dialog when update is downloaded
-      dialog.showMessageBox(this.mainWindow, {
-        type: 'info',
-        title: 'Update Ready',
-        message: 'Update has been downloaded.',
-        detail: 'The application will restart to install the update.',
-        buttons: ['Restart Now', 'Later'],
-        defaultId: 0
-      }).then(({ response }) => {
-        if (response === 0) {
-          // User chose to restart
-          this.installUpdate()
-        }
-      })
     })
   }
 
@@ -104,19 +74,9 @@ export class UpdateManager {
   }
 
   // Check for updates
-  checkForUpdates(showDialog=false) {
+  checkForUpdates() {
     if (!this.isProd) {
       this.sendStatus('update-not-available', { message: 'Updates only available in production build' })
-      
-      // Show a native dialog in development mode
-      if (showDialog) {
-        dialog.showMessageBox(this.mainWindow, {
-          type: 'info',
-          title: 'Development Mode',
-          message: 'Updates are only available in production builds.',
-          buttons: ['OK']
-        })
-      }
       
       return false
     }

@@ -49,7 +49,7 @@ export const UpdateNotification: React.FC = () => {
     });
 
     // Check for updates when component mounts
-    // window.ipc.checkForUpdates();
+    window.ipc.checkForUpdates();
 
     return () => {
       if (removeListener) removeListener();

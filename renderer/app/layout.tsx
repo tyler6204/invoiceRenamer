@@ -3,7 +3,6 @@ import '@/styles/globals.css'
 
 import { cn } from '@/lib/utils'
 import { Metadata } from 'next'
-import { UpdateNotification } from '@/components/updateNotification'
 export const metadata: Metadata = {
   title: 'Invoice Renamer',
   description:
@@ -24,7 +23,6 @@ export default function RootLayout({
           'bg-background min-h-screen font-sans antialiased',
         )}>
         {children}
-        <UpdateNotification />
       </body>
     </html>
   )

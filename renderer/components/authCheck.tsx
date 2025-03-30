@@ -68,16 +68,16 @@ export const AuthCheck: React.FC<AuthCheckProps> = ({ children }) => {
       <AlertDialog open={showDialog} onOpenChange={() => {}}>
         <AlertDialogContent className="sm:max-w-md ">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Lock className="h-5 w-5" />
-              Invoice Renamer Authentication
+            <AlertDialogTitle className="flex flex-col items-center gap-3">
+              <Lock className="h-8 w-8" />
+              Verify Authentication
             </AlertDialogTitle>
             <AlertDialogDescription>
               Please enter the password to access the application.
             </AlertDialogDescription>
           </AlertDialogHeader>
           
-          <div className="py-4">
+          <div className="py-3">
             <Input
               id="password"
               type="password"
