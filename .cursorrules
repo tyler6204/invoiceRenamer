@@ -1,0 +1,6 @@
+This is an Nextron app (electron/nexjs)
+
+We are using pnpm and shadcn components
+
+This is a invoice renamer tool where the user can drop a img or pdf and it will extract all the 
+invoices from those and rename the dragged file or duplicate it if there are multiple invoices in one input.

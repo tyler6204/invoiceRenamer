@@ -1,0 +1,21 @@
+appId: com.yusttech.invoicerenamer
+productName: Invoice Renamer
+copyright: Copyright © 2024 Tyler Yust
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - from: .
+    filter:
+      - package.json
+      - app
+extraFiles:
+  - from: main/preload.js
+    to: app/preload.js
+publish: null
+linux:
+  target:
+    - deb
+    - rpm
+    - snap
+  category: Utility
