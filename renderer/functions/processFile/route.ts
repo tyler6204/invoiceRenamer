@@ -28,14 +28,15 @@ const removeExtension = (filename: string): string => {
 
 export async function processFiles(files: File[], selectedModel = "gemini-pro", renamingSettings: RenamingSettings) {
   try {
-    // Process all files and flatten the results
-    const allResults: Result[] = [];
-    let newFiles: number = 0;
-    for (const file of files) {
+    // Process all files in parallel
+    const processingPromises = files.map(async (file) => {
       try {
         // Get file path
         const fileName = file.name;
         let filePath = window.ipc.getPathForFile(file);
+        
+        const results: Result[] = [];
+        let fileNewFiles = 0;
         
         // Process with AI - now returns array of names
         const namesFromAI = await AIProcessFile(file, selectedModel, renamingSettings);
@@ -46,13 +47,13 @@ export async function processFiles(files: File[], selectedModel = "gemini-pro", 
           const ext = path.extname(fileName);
           const renameResult = await renameFileWithConflictResolution(filePath, defaultName, ext);
           
-          allResults.push({
+          results.push({
             success: renameResult.success,
             originalName: fileName,
             newName: defaultName,
             fileLocation: renameResult.newPath || filePath
           });
-          continue;
+          return { results, newFiles: fileNewFiles };
         }
         
         // Handle each name (each represents an invoice in the file)
@@ -78,28 +79,49 @@ export async function processFiles(files: File[], selectedModel = "gemini-pro", 
             console.log("Creating New File from:", sourcePath);
             const newPath = path.join(path.dirname(sourcePath), finalName + ext);
             renameResult = await window.ipc.duplicateFile(sourcePath, newPath);
+            
+            // Increment new files counter if successful
+            if (renameResult.success) {
+              fileNewFiles++;
+            }
           }
           
-          allResults.push({
+          results.push({
             success: renameResult.success,
             originalName: fileName,
             newName: finalName,
             fileLocation: renameResult.newPath || sourcePath
           });
         }
+        
+        return { results, newFiles: fileNewFiles };
       } catch (error) {
         console.error(`Error processing file ${file.name}:`, error);
-        allResults.push({
-          success: false,
-          originalName: file.name,
-          newName: removeExtension(file.name),
-          fileLocation: window.ipc.getPathForFile(file)
-        });
+        return {
+          results: [{
+            success: false,
+            originalName: file.name,
+            newName: removeExtension(file.name),
+            fileLocation: window.ipc.getPathForFile(file)
+          }],
+          newFiles: 0
+        };
       }
-    }
+    });
+    
+    // Wait for all files to be processed
+    const processedResults = await Promise.all(processingPromises);
+    
+    // Combine results and count new files
+    const allResults: Result[] = [];
+    let totalNewFiles = 0;
+    
+    processedResults.forEach(result => {
+      allResults.push(...result.results);
+      totalNewFiles += result.newFiles;
+    });
 
-
-    return { results: allResults, newFiles };
+    return { results: allResults, newFiles: totalNewFiles };
   } catch (error) {
     console.error('Error processing files:', error);
     return {

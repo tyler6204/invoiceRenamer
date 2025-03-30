@@ -2,7 +2,7 @@
   "private": true,
   "name": "invoice-renamer",
   "description": "This tool renames invoices to a more readable format for accounting purposes.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "author": "Tyler Yust <tyler@yusttech.com>",
   "main": "app/background.js",
   "repository": "https://github.com/tyler6204/invoiceRenamer",

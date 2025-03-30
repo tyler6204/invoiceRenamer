@@ -25,7 +25,7 @@ export const AuthCheck: React.FC<AuthCheckProps> = ({ children }) => {
 
   useEffect(() => {
     // Check if we're already authenticated in this session
-    const authState = sessionStorage.getItem('isAuthenticated');
+    const authState = localStorage.getItem('isAuthenticated');
     if (authState === 'true') {
       setIsAuthenticated(true);
       setShowDialog(false);
@@ -40,7 +40,7 @@ export const AuthCheck: React.FC<AuthCheckProps> = ({ children }) => {
       if (correctPassword === password) {
         setIsAuthenticated(true);
         setShowDialog(false);
-        sessionStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('isAuthenticated', 'true');
       } else {
         setError('Incorrect password. Please try again.');
       }
