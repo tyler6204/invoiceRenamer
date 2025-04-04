@@ -14,13 +14,25 @@
   },
   "scripts": {
     "dev": "nextron",
-    "build": "cross-env $(grep -v '^#' .env | xargs) nextron build --win --mac",
-    "publish": "cross-env $(grep -v '^#' .env | xargs) electron-builder --win --mac --publish always",
-    "publish-debug": "cross-env DEBUG=electron-builder,electron-notarize $(grep -v '^#' .env | xargs) electron-builder --win --mac --publish always",
-    "build-mac": "cross-env $(grep -v '^#' .env | xargs) electron-builder --mac",
-    "build-win": "cross-env $(grep -v '^#' .env | xargs) electron-builder --win",
+
+    "build": "nextron build",
+
+    "build-mac": "nextron build && cross-env $(grep -v '^#' .env | xargs) electron-builder --mac",
+
+    "build-win": "nextron build && cross-env $(grep -v '^#' .env | xargs) electron-builder --win --x64",
+
+    "build-all": "nextron build && cross-env $(grep -v '^#' .env | xargs) electron-builder --mac --win --x64",
+
+    "publish": "nextron build && cross-env $(grep -v '^#' .env | xargs) electron-builder --mac --win --x64 --publish always",
+
     "postinstall": "electron-builder install-app-deps"
   },
+  "extraFiles": [
+    {
+      "from": "main/preload.js",
+      "to": "app/preload.js"
+    }
+  ],
   "dependencies": {
     "@ai-sdk/google": "^1.2.3",
     "@ai-sdk/openai": "^1.3.4",
@@ -106,12 +118,6 @@
       "node_modules/**/*",
       "package.json"
     ],
-    "extraFiles": [
-      {
-        "from": "main/preload.js",
-        "to": "app/preload.js"
-      }
-    ],
     "mac": {
       "icon": "resources/logo.png",
       "hardenedRuntime": true,
@@ -129,7 +135,8 @@
     "win": {
       "icon": "resources/logo.png",
       "target": [
-        "nsis"
+        "nsis",
+        "zip"
       ]
     },
     "linux": {
