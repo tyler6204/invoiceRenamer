@@ -13,13 +13,52 @@ export const createWindow = (
   const key = 'window-state'
   const name = `window-state-${windowName}`
   const store = new Store<Rectangle>({ name })
+
   const defaultSize = {
-    width: options.width,
-    height: options.height,
+    width: options.width ?? 800,
+    height: options.height ?? 600,
   }
-  let state = {}
 
   const restore = () => store.get(key, defaultSize)
+
+  const resetToDefaults = () => {
+    const bounds = screen.getPrimaryDisplay().bounds
+    return {
+      ...defaultSize,
+      x: (bounds.width - defaultSize.width) / 2,
+      y: (bounds.height - defaultSize.height) / 2,
+    }
+  }
+
+  const windowWithinBounds = (winState, bounds) => {
+    return (
+      winState.x >= bounds.x &&
+      winState.y >= bounds.y &&
+      winState.x + winState.width <= bounds.x + bounds.width &&
+      winState.y + winState.height <= bounds.y + bounds.height
+    )
+  }
+
+  const ensureVisibleOnSomeDisplay = (winState) => {
+    const visible = screen.getAllDisplays().some((display) =>
+      windowWithinBounds(winState, display.bounds)
+    )
+    return visible ? winState : resetToDefaults()
+  }
+
+  let state = ensureVisibleOnSomeDisplay(restore())
+
+  const win = new BrowserWindow({
+    ...state,
+    ...options,
+    minWidth: options.minWidth ?? 600,
+    minHeight: options.minHeight ?? 600,  
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      ...options.webPreferences,
+    },
+  })
 
   const getCurrentPosition = () => {
     const position = win.getPosition()
@@ -32,55 +71,14 @@ export const createWindow = (
     }
   }
 
-  const windowWithinBounds = (windowState, bounds) => {
-    return (
-      windowState.x >= bounds.x &&
-      windowState.y >= bounds.y &&
-      windowState.x + windowState.width <= bounds.x + bounds.width &&
-      windowState.y + windowState.height <= bounds.y + bounds.height
-    )
-  }
-
-  const resetToDefaults = () => {
-    const bounds = screen.getPrimaryDisplay().bounds
-    return Object.assign({}, defaultSize, {
-      x: (bounds.width - defaultSize.width) / 2,
-      y: (bounds.height - defaultSize.height) / 2,
-    })
-  }
-
-  const ensureVisibleOnSomeDisplay = (windowState) => {
-    const visible = screen.getAllDisplays().some((display) => {
-      return windowWithinBounds(windowState, display.bounds)
-    })
-    if (!visible) {
-      // Window is partially or fully not visible now.
-      // Reset it to safe defaults.
-      return resetToDefaults()
-    }
-    return windowState
-  }
-
   const saveState = () => {
     if (!win.isMinimized() && !win.isMaximized()) {
-      Object.assign(state, getCurrentPosition())
+      store.set(key, getCurrentPosition())
     }
-    store.set(key, state)
   }
-
-  state = ensureVisibleOnSomeDisplay(restore())
-
-  const win = new BrowserWindow({
-    ...state,
-    ...options,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      ...options.webPreferences,
-    },
-  })
 
   win.on('close', saveState)
 
   return win
 }
+

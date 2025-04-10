@@ -38,7 +38,7 @@ export default function Header({ selectedModel, setSelectedModel }: HeaderProps)
     return (
         <header className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center space-x-2">   
-                <Image src="/images/logo.png" alt="Invoice Renamer" width={32} height={32} />
+                <Image src="/images/logo.png" alt="Invoice Renamer" width={32} height={32} draggable={false} className="select-none pointer-events-none" />
                 <h1 className="text-2xl font-semibold">Invoice Renamer</h1>
             </div>
             <div className="flex items-center space-x-2">
