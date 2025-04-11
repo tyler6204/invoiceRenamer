@@ -34,28 +34,43 @@ export default function ResultsComponent({
   // --- State Initialization and Synchronization ---
   useEffect(() => {
     if (results && results.results) {
-      const initialEditableResults = results.results.map((result): EditableResult => {
+      window.ipc.log(`[ResultsComponent useEffect] Processing ${results.results.length} results from props.`);
+      
+      const initialEditableResults = results.results.map((result, idx): EditableResult => {
         // Always derive initial display name from fileLocation if possible
         let initialDisplayName = 'Unknown';
-        if (result.fileLocation && typeof result.fileLocation === 'string') {
-            const currentExt = path.extname(result.fileLocation);
-            initialDisplayName = path.basename(result.fileLocation, currentExt);
+        
+        if (result.newName && typeof result.newName === 'string') {
+          // Prefer the newName from the API result if it exists and is valid
+          initialDisplayName = result.newName;
+          window.ipc.log(`[ResultsComponent useEffect] Result #${idx} using provided newName: "${initialDisplayName}"`);
+        } else if (result.fileLocation && typeof result.fileLocation === 'string') {
+          // Fall back to extracting from fileLocation if needed
+          const currentExt = path.extname(result.fileLocation);
+          initialDisplayName = path.basename(result.fileLocation, currentExt);
+          window.ipc.log(`[ResultsComponent useEffect] Result #${idx} derived name from fileLocation: "${initialDisplayName}"`);
         } else {
-            // Fallback if fileLocation is missing/invalid, use originalName's base
-            const fallbackExt = path.extname(result.originalName || 'Unknown');
-            initialDisplayName = path.basename(result.originalName || 'Unknown', fallbackExt);
+          // Last resort: use originalName's basename
+          const fallbackExt = path.extname(result.originalName || 'Unknown');
+          initialDisplayName = path.basename(result.originalName || 'Unknown', fallbackExt);
+          window.ipc.log(`[ResultsComponent useEffect] Result #${idx} using basename from originalName: "${initialDisplayName}"`);
         }
 
         return {
           ...result,
-          // Ensure newName state starts with just the base filename
+          // Always ensure newName is just the basename, not a path
           newName: initialDisplayName 
         };
       }).filter(result => result.fileLocation); // Keep filtering based on fileLocation presence
 
-      setEditableResults(initialEditableResults);
       window.ipc.log(`[ResultsComponent useEffect] Initialized ${initialEditableResults.length} editable results.`);
+      // Log the first result for debugging
+      if (initialEditableResults.length > 0) {
+        const sample = initialEditableResults[0];
+        window.ipc.log(`[ResultsComponent useEffect] Sample - newName: "${sample.newName}", fileLocation: "${sample.fileLocation}"`);
+      }
 
+      setEditableResults(initialEditableResults);
     } else {
       setEditableResults([]); // Clear results if props are null/empty
     }
@@ -141,12 +156,27 @@ export default function ResultsComponent({
     if (!originalFileLocation || typeof originalFileLocation !== 'string' || !path.isAbsolute(originalFileLocation)) {
        const errorMsg = `Cannot rename: Invalid or non-absolute original file location state: "${originalFileLocation}"`;
        console.error(errorMsg); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
-       // Use the original result name for the toast message
-       toast.error("Rename Error", { description: `Internal error: Invalid current path for ${resultToRename.originalName}.` }); 
+       toast.error("Rename Error", { description: `Invalid file path.` }); 
        resetInputState(index, originalFileLocation); // Reset input on validation failure
        return;
     }
-     if (!desiredNewName || typeof desiredNewName !== 'string' || desiredNewName.trim().length === 0) {
+
+    // First check if the file exists at the current location
+    try {
+      const existsResult = await window.ipc.checkFileExists(originalFileLocation);
+      if (!existsResult.exists) {
+        window.ipc.log(`[ResultsComponent renameFileOnAction] File doesn't exist at path: "${originalFileLocation}"`);
+        toast.error("Rename Error", { description: `File not found at current location.` });
+        return;
+      }
+    } catch (error) {
+      console.error("Error checking file existence:", error);
+      window.ipc.log(`[ResultsComponent] Error checking existence: ${error.message}`);
+      toast.error("Rename Error", { description: `Error checking file: ${error.message}` });
+      return;
+    }
+
+    if (!desiredNewName || typeof desiredNewName !== 'string' || desiredNewName.trim().length === 0) {
        const errorMsg = `Cannot rename: Desired name is empty or invalid.`;
        console.error(errorMsg); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
        toast.error("Rename Error", { description: "Filename cannot be empty." });
@@ -157,10 +187,10 @@ export default function ResultsComponent({
     const ext = path.extname(originalFileLocation); 
     // Sanitize the desired base name from the input
     const sanitizedDesiredBaseName = sanitizeFilename(desiredNewName); 
-     if (!sanitizedDesiredBaseName || sanitizedDesiredBaseName.trim().length === 0) {
+    if (!sanitizedDesiredBaseName || sanitizedDesiredBaseName.trim().length === 0) {
        const errorMsg = `Cannot rename: Sanitized name is empty or invalid for desired name "${desiredNewName}".`;
        console.error(errorMsg); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
-       toast.error("Rename Error", { description: "Invalid characters in filename." }); // Use sonner
+       toast.error("Rename Error", { description: "Invalid characters in filename." }); 
        resetInputState(index, originalFileLocation); // Reset input
        return;
     }
@@ -175,18 +205,18 @@ export default function ResultsComponent({
 
     window.ipc.log(`[ResultsComponent renameFileOnAction index ${index}] Calling IPC resolveAndRename: originalPath="${originalFileLocation}", baseName="${sanitizedDesiredBaseName}", ext="${ext}"`);
     
-      // Add a loading toast
-      const toastId = toast.loading("Renaming file...", {
-        description: `${sanitizedDesiredBaseName}${ext}`
+    // Add a loading toast
+    const toastId = toast.loading("Renaming file...", {
+      description: `${sanitizedDesiredBaseName}${ext}`
     });
 
     try {
-    
       const renameOpResult = await window.ipc.resolveAndRename(
         originalFileLocation,
         sanitizedDesiredBaseName,
         ext
       );
+      
       window.ipc.log(`[ResultsComponent renameFileOnAction index ${index}] IPC response: ${JSON.stringify(renameOpResult)}`);
 
       // --- Update State Based on IPC Result ---
@@ -211,8 +241,8 @@ export default function ResultsComponent({
         window.ipc.log(`[ResultsComponent renameFileOnAction index ${index}] State updated successfully. New path: "${actualNewAbsolutePath}", Display name: "${actualNewBaseName}"`);
         toast.success("Rename Successful", {
           id: toastId, // Update the loading toast
-          description: `Renamed to ${actualNewBaseName}${actualNewExt}`
-      });
+          description: `Renamed to ${actualNewBaseName}`
+        });
 
       } else {
         // FAILURE reported by IPC: Log, notify, reset input state
@@ -220,38 +250,40 @@ export default function ResultsComponent({
         console.error(errorMsg); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
         toast.error("Rename Failed", {
           id: toastId, // Update the loading toast
-          // Show the name that failed and the error
+          // Show just the basename and error
           description: `${path.basename(originalFileLocation)}: ${renameOpResult.error || 'Could not rename the file.'}` 
-      });
-      resetInputState(index, originalFileLocation); // Reset input to original basename
+        });
+        resetInputState(index, originalFileLocation); // Reset input to original basename
       }
     } catch (error: any) {
       const errorMsg = `Error calling resolveAndRename IPC: ${error.message}`;
       console.error(errorMsg, error); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
-     // Use sonner toast for error, potentially update loading toast if it exists (might need to dismiss manually)
       toast.error("Rename Error", {
-          // If toastId was created, update it, otherwise create new error toast
-          ...(toastId && { id: toastId }),
-          description: "An unexpected error occurred."
+          id: toastId,
+          description: `Failed to rename: ${error.message}`
       });
       resetInputState(index, originalFileLocation); // Reset input state
    }
- }, [editableResults, editingIndex]); // Removed toast dependency
+ }, [editableResults, editingIndex]); // Remove resetInputState from dependencies to avoid circular reference
 
   // --- Helper Functions ---
 
   // Resets the display name for a given index back to the basename of its current fileLocation
   const resetInputState = useCallback((index: number, currentFileLocation: string) => {
      if (!currentFileLocation || typeof currentFileLocation !== 'string') return; // Safety check
+     
+     // Always extract just the basename, never use the full path
      const currentExt = path.extname(currentFileLocation);
      const currentBaseName = path.basename(currentFileLocation, currentExt);
+     
+     window.ipc.log(`[ResultsComponent resetInputState] Index ${index}: Resetting to basename "${currentBaseName}" from "${currentFileLocation}"`);
+     
      setEditableResults(currentResults =>
         currentResults.map((res, i) =>
           i === index ? { ...res, newName: currentBaseName } : res
         )
      );
-     window.ipc.log(`[ResultsComponent resetInputState index ${index}] Reverted display name to "${currentBaseName}".`);
-  }, []); // No dependencies
+  }, []);
 
 
   // Check if the name is valid for display styling (e.g., not 'Unknown')
@@ -340,10 +372,10 @@ export default function ResultsComponent({
                     layout // Animate layout changes
                   >
                     <div className="flex items-center space-x-3">
-                      {/* Input Field */}
+                      {/* Input Field - Display only the basename in newName */}
                       <div className="flex-grow min-w-0">
                         <Input
-                          value={result.newName} // Display the editable name from state
+                          value={result.newName} // Display ONLY the base filename from state
                           onChange={(e) => handleNameChange(index, e.target.value)}
                           onFocus={() => setEditingIndex(index)} // Set editing index on focus
                           onBlur={() => {

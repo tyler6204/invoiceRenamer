@@ -52,11 +52,19 @@ export async function processFiles(files: File[], selectedModel = "gemini-pro", 
 
           // *** USE NEW IPC HANDLER ***
           const renameResult = await window.ipc.resolveAndRename(filePath, sanitizedDefaultName, ext);
+          
+          // Extract just the basename for display after rename
+          const finalDisplayName = renameResult?.success && renameResult.newPath 
+            ? path.basename(renameResult.newPath, path.extname(renameResult.newPath))
+            : sanitizedDefaultName;
+            
+          window.ipc.log(`[processFiles loop fallback] Result: success=${renameResult?.success}, displayName="${finalDisplayName}"`);
 
           results.push({
             success: renameResult?.success ?? false,
             originalName: fileName,
-            newName: sanitizedDefaultName,
+            // Always use just the basename for newName
+            newName: finalDisplayName,
             fileLocation: renameResult?.newPath || filePath // Use actual path from IPC or fallback
           });
 
@@ -149,6 +157,8 @@ export async function processFiles(files: File[], selectedModel = "gemini-pro", 
                 // Store the final absolute path
                 fileLocation: finalAbsolutePath 
               });
+              
+              window.ipc.log(`[processFiles loop i=${i}] Added result: newName="${finalActualBaseName}", fileLocation="${finalAbsolutePath}"`);
           }
         } // End for loop
 
@@ -157,11 +167,16 @@ export async function processFiles(files: File[], selectedModel = "gemini-pro", 
       } catch (error: any) {
         console.error(`Error processing file ${fileName} (path: ${filePath || 'unknown'}):`, error);
         window.ipc.log(`[processFiles loop ERROR] File: ${fileName}, Path: ${filePath || 'unknown'}, Error: ${error.message} \nStack: ${error.stack}`);
+        
+        // Create a basic fallback result with just the basename as newName
+        const fallbackBaseName = path.basename(fileName, path.extname(fileName));
+        window.ipc.log(`[processFiles loop ERROR] Creating fallback result with newName="${fallbackBaseName}"`);
+        
         return {
           results: [{
             success: false,
             originalName: fileName,
-            newName: removeExtension(fileName),
+            newName: fallbackBaseName, // Just the basename without extension
             fileLocation: filePath || ''
           }],
           newFiles: 0
@@ -176,6 +191,14 @@ export async function processFiles(files: File[], selectedModel = "gemini-pro", 
       allResults.push(...result.results);
       totalNewFiles += result.newFiles;
     });
+
+    window.ipc.log(`[processFiles] All processing complete. Returning ${allResults.length} results with ${totalNewFiles} new files.`);
+    
+    // Log a sample of the results for debugging
+    if (allResults.length > 0) {
+      const sample = allResults[0];
+      window.ipc.log(`[processFiles] Sample result - originalName: "${sample.originalName}", newName: "${sample.newName}", fileLocation: "${sample.fileLocation}"`);
+    }
 
     return { results: allResults, newFiles: totalNewFiles };
 
