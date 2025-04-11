@@ -56,7 +56,7 @@ export async function processFiles(files: File[], selectedModel = "gemini-pro", 
           results.push({
             success: renameResult?.success ?? false,
             originalName: fileName,
-            newName: defaultName, // Keep intended name separate from potentially modified path
+            newName: sanitizedDefaultName,
             fileLocation: renameResult?.newPath || filePath // Use actual path from IPC or fallback
           });
 
@@ -66,11 +66,14 @@ export async function processFiles(files: File[], selectedModel = "gemini-pro", 
         let currentSourcePath = filePath; // Use a separate var for the source of duplication
 
         for (let i = 0; i < namesFromAI.length; i++) {
-          const finalName = namesFromAI[i]; // Name from AI (may contain invalid chars)
+          const nameFromAI = namesFromAI[i]; // Original name from AI (may contain invalid chars)
           const ext = path.extname(fileName);
-          const sanitizedBaseName = sanitizeFilename(finalName); // Sanitize for the file system
+          // Sanitize the base name from AI for the file system operation
+          const sanitizedBaseName = sanitizeFilename(nameFromAI); 
 
           let operationResult; // To store result from rename or duplicate
+          let finalAbsolutePath; // To store the final path from the operation
+          let finalDisplayName; // To store the base name intended for display
 
           if (i === 0) {
             // --- Rename original file ---
@@ -81,51 +84,72 @@ export async function processFiles(files: File[], selectedModel = "gemini-pro", 
 
             if (operationResult?.success && operationResult.newPath) {
               window.ipc.log(`[processFiles loop i=${i}] Rename successful. New path: "${operationResult.newPath}"`);
-              // Update currentSourcePath for potential subsequent duplications *from the newly renamed file*
-              currentSourcePath = operationResult.newPath;
+              currentSourcePath = operationResult.newPath; // Update source for potential duplicates
+              finalAbsolutePath = operationResult.newPath;
+              // Use the sanitized name as the display name initially
+              finalDisplayName = sanitizedBaseName; 
             } else {
                console.error(`Failed to rename ${currentSourcePath} to ${sanitizedBaseName}, skipping duplicates.`);
                window.ipc.log(`[processFiles loop i=${i}] Rename FAILED for filePath="${currentSourcePath}", desiredName="${sanitizedBaseName}". Error: ${operationResult?.error}`);
+               // If rename fails, create a failure result but keep original info
+               results.push({
+                   success: false,
+                   originalName: fileName,
+                   newName: nameFromAI, // Show the name AI intended
+                   fileLocation: currentSourcePath // Original path before failed rename
+               });
                break; // Exit loop for this file if first rename fails
             }
           } else {
              // --- Duplicate file for additional invoices ---
              window.ipc.log(`[processFiles loop i=${i}] Creating New File from sourcePath: "${currentSourcePath}"`);
 
-             // Construct the *desired* absolute target path in the renderer (it's just a string here)
-             const targetDir = path.dirname(currentSourcePath); // Use path from the *previous* successful operation
-             const targetFileName = sanitizedBaseName + ext; // Use sanitized name + extension
-             const desiredTargetPath = path.join(targetDir, targetFileName); // Construct desired full path
+             const targetDir = path.dirname(currentSourcePath);
+             // Use sanitized name + extension for the target filename
+             const targetFileName = sanitizedBaseName + ext; 
+             const desiredTargetPath = path.join(targetDir, targetFileName); 
 
              window.ipc.log(`[processFiles loop i=${i}] Calling resolveAndDuplicate with sourcePath="${currentSourcePath}", desiredTargetPath="${desiredTargetPath}"`);
 
              // *** USE NEW IPC HANDLER ***
-             // Note: resolve-and-duplicate currently prevents overwrites. If you need conflict resolution (adding "(1)"),
-             // you'd need to enhance the resolve-and-duplicate handler similar to resolve-and-rename.
              operationResult = await window.ipc.resolveAndDuplicate(currentSourcePath, desiredTargetPath);
 
              window.ipc.log(`[processFiles loop i=${i}] Duplicate response: ${JSON.stringify(operationResult)}`);
 
-             if (operationResult?.success) {
+             if (operationResult?.success && operationResult.newPath) {
                fileNewFiles++;
-               // If duplicating multiple times, decide if the NEXT duplicate should come from the ORIGINAL source
-               // or the NEWLY created duplicate. Current logic uses the path from the *previous* successful step (currentSourcePath).
+               finalAbsolutePath = operationResult.newPath;
+               // Use the sanitized name as the display name initially
+               finalDisplayName = sanitizedBaseName; 
+               // Note: currentSourcePath remains the same for subsequent duplicates *from the original (now potentially renamed) file*
              } else {
                console.error(`Failed to duplicate file to ${desiredTargetPath}`);
                window.ipc.log(`[processFiles loop i=${i}] Duplicate FAILED for sourcePath="${currentSourcePath}", desiredTargetPath="${desiredTargetPath}". Error: ${operationResult?.error}`);
-               // Decide if you want to stop processing this file or just skip this duplicate
-               // continue; // Skip to next name from AI
+                // If duplicate fails, create a failure result
+                results.push({
+                    success: false,
+                    originalName: fileName,
+                    newName: nameFromAI, // Show the name AI intended
+                    fileLocation: currentSourcePath // Original path before failed duplicate
+                });
                break; // Stop processing this file if duplication fails
              }
           }
 
-          // Add result for this invoice (rename or duplicate)
-          results.push({
-            success: operationResult?.success ?? false,
-            originalName: fileName, // Always the original drop name
-            newName: finalName, // The name intended by AI/formatting
-            fileLocation: operationResult?.newPath || currentSourcePath // The actual final path on disk
-          });
+          // Add result only if the operation was successful (or handled above for failure)
+          if (operationResult?.success && finalAbsolutePath && finalDisplayName) {
+              // Extract the actual base name from the final path in case of conflicts (e.g., "(1)" was added)
+              const finalActualBaseName = path.basename(finalAbsolutePath, path.extname(finalAbsolutePath));
+
+              results.push({
+                success: true,
+                originalName: fileName, // Always the original drop name
+                // Use the actual final base name for display
+                newName: finalActualBaseName, 
+                // Store the final absolute path
+                fileLocation: finalAbsolutePath 
+              });
+          }
         } // End for loop
 
         return { results, newFiles: fileNewFiles };

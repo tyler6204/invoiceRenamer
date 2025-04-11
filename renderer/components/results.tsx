@@ -37,12 +37,16 @@ export default function ResultsComponent({
       const initialEditableResults = results.results.map((result): EditableResult => {
         // Determine the initial display name from the current file location's basename
         const currentExt = path.extname(result.fileLocation || result.originalName || 'Unknown');
-        const currentBaseName = path.basename(result.fileLocation || 'Unknown', currentExt);
+        // Get the base name from the fileLocation if available, otherwise use newName from props
+        const currentBaseName = result.fileLocation 
+            ? path.basename(result.fileLocation, currentExt) 
+            : result.newName; // Use the provided newName if fileLocation is missing
+        
         return {
           ...result,
           // Ensure the initial display name matches the basename of the actual file location
-          // Fallback to 'Unknown' if location is somehow invalid
-          newName: result.fileLocation ? currentBaseName : 'Unknown'
+          // Fallback to the provided newName if location is somehow invalid
+          newName: currentBaseName || 'Unknown' 
         };
       }).filter(result => result.fileLocation); // Filter out results without a valid location initially
 
@@ -134,7 +138,8 @@ export default function ResultsComponent({
     if (!originalFileLocation || typeof originalFileLocation !== 'string' || !path.isAbsolute(originalFileLocation)) {
        const errorMsg = `Cannot rename: Invalid or non-absolute original file location: "${originalFileLocation}"`;
        console.error(errorMsg); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
-       toast.error("Rename Error", { description: "Invalid characters in filename." }); // Use sonner
+       // Use the original result name for the toast message
+       toast.error("Rename Error", { description: `Invalid characters in filename: ${resultToRename.originalName}` }); 
        resetInputState(index, originalFileLocation); // Reset input on validation failure
        return;
     }
@@ -204,11 +209,12 @@ export default function ResultsComponent({
 
       } else {
         // FAILURE reported by IPC: Log, notify, reset input state
-        const errorMsg = `Failed to rename file via IPC: ${renameOpResult.error || 'Unknown IPC error'}`;
+        const errorMsg = `Failed to rename file via IPC: ${renameOpResult.error || 'Unknown IPC error'}`; 
         console.error(errorMsg); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
         toast.error("Rename Failed", {
           id: toastId, // Update the loading toast
-          description: renameOpResult.error || 'Could not rename the file.'
+          // Show the name that failed and the error
+          description: `${path.basename(originalFileLocation)}: ${renameOpResult.error || 'Could not rename the file.'}` 
       });
       resetInputState(index, originalFileLocation); // Reset input to original basename
       }
@@ -229,7 +235,7 @@ export default function ResultsComponent({
 
   // Resets the display name for a given index back to the basename of its current fileLocation
   const resetInputState = useCallback((index: number, currentFileLocation: string) => {
-     if (!currentFileLocation) return; // Safety check
+     if (!currentFileLocation || typeof currentFileLocation !== 'string') return; // Safety check
      const currentExt = path.extname(currentFileLocation);
      const currentBaseName = path.basename(currentFileLocation, currentExt);
      setEditableResults(currentResults =>

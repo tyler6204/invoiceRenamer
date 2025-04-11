@@ -165,6 +165,7 @@ ipcMain.handle('check-file-exists', async (_, filePath) => {
 // *** NEW: Resolve and Rename Handler ***
 ipcMain.handle('resolve-and-rename', async (_, originalFilePath: string, desiredNewBaseName: string, fileExtension: string) => {
   logToFile(`[resolve-and-rename] Request: original="${originalFilePath}", desiredBase="${desiredNewBaseName}", ext="${fileExtension}"`);
+  let fullNewPath = ''; // Declare outside the try block
   try {
     // --- Validation ---
     if (!originalFilePath || typeof originalFilePath !== 'string' || !path.isAbsolute(originalFilePath)) {
@@ -186,7 +187,6 @@ ipcMain.handle('resolve-and-rename', async (_, originalFilePath: string, desired
     const originalDir = path.dirname(originalFilePath);
     let counter = 0; // Start counter at 0 for the first attempt
     let newFileName = '';
-    let fullNewPath = '';
     let exists = true; // Assume exists initially to enter the loop
 
     while (exists) {
@@ -228,7 +228,8 @@ ipcMain.handle('resolve-and-rename', async (_, originalFilePath: string, desired
 
   } catch (error: any) {
     console.error('[resolve-and-rename] Error:', error);
-    logToFile(`[resolve-and-rename] Failed. Error: ${error.message}. Original: "${originalFilePath}", Target Attempt: "${fullNewPath}"`); // Log target attempt too
+    // Now fullNewPath is accessible here, even if the error occurred before its final assignment in the loop
+    logToFile(`[resolve-and-rename] Failed. Error: ${error.message}. Original: "${originalFilePath}", Target Attempt: "${fullNewPath || 'unknown'}"`); // Log target attempt too
     return { success: false, error: error.message, originalPath: originalFilePath, attemptedPath: fullNewPath }; // Return attemptedPath
   }
 });
