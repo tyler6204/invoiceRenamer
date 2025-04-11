@@ -35,20 +35,23 @@ export default function ResultsComponent({
   useEffect(() => {
     if (results && results.results) {
       const initialEditableResults = results.results.map((result): EditableResult => {
-        // Determine the initial display name from the current file location's basename
-        const currentExt = path.extname(result.fileLocation || result.originalName || 'Unknown');
-        // Get the base name from the fileLocation if available, otherwise use newName from props
-        const currentBaseName = result.fileLocation 
-            ? path.basename(result.fileLocation, currentExt) 
-            : result.newName; // Use the provided newName if fileLocation is missing
-        
+        // Always derive initial display name from fileLocation if possible
+        let initialDisplayName = 'Unknown';
+        if (result.fileLocation && typeof result.fileLocation === 'string') {
+            const currentExt = path.extname(result.fileLocation);
+            initialDisplayName = path.basename(result.fileLocation, currentExt);
+        } else {
+            // Fallback if fileLocation is missing/invalid, use originalName's base
+            const fallbackExt = path.extname(result.originalName || 'Unknown');
+            initialDisplayName = path.basename(result.originalName || 'Unknown', fallbackExt);
+        }
+
         return {
           ...result,
-          // Ensure the initial display name matches the basename of the actual file location
-          // Fallback to the provided newName if location is somehow invalid
-          newName: currentBaseName || 'Unknown' 
+          // Ensure newName state starts with just the base filename
+          newName: initialDisplayName 
         };
-      }).filter(result => result.fileLocation); // Filter out results without a valid location initially
+      }).filter(result => result.fileLocation); // Keep filtering based on fileLocation presence
 
       setEditableResults(initialEditableResults);
       window.ipc.log(`[ResultsComponent useEffect] Initialized ${initialEditableResults.length} editable results.`);
@@ -129,30 +132,33 @@ export default function ResultsComponent({
         return; // Should not happen
     }
 
-    const originalFileLocation = resultToRename.fileLocation; // The known path *before* this rename attempt
-    const desiredNewName = resultToRename.newName; // The name typed into the input
+    const originalFileLocation = resultToRename.fileLocation; // The current absolute path from state
+    const desiredNewName = resultToRename.newName; // The name typed into the input (base name only)
 
-    window.ipc.log(`[ResultsComponent renameFileOnAction index ${index}] Initiating. Original path: "${originalFileLocation}", Desired name: "${desiredNewName}"`);
+    window.ipc.log(`[ResultsComponent renameFileOnAction index ${index}] Initiating. Original path: "${originalFileLocation}", Desired base name: "${desiredNewName}"`);
 
     // --- Pre-IPC Validation ---
     if (!originalFileLocation || typeof originalFileLocation !== 'string' || !path.isAbsolute(originalFileLocation)) {
-       const errorMsg = `Cannot rename: Invalid or non-absolute original file location: "${originalFileLocation}"`;
+       const errorMsg = `Cannot rename: Invalid or non-absolute original file location state: "${originalFileLocation}"`;
        console.error(errorMsg); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
        // Use the original result name for the toast message
-       toast.error("Rename Error", { description: `Invalid characters in filename: ${resultToRename.originalName}` }); 
+       toast.error("Rename Error", { description: `Internal error: Invalid current path for ${resultToRename.originalName}.` }); 
        resetInputState(index, originalFileLocation); // Reset input on validation failure
        return;
     }
-     if (!desiredNewName) {
-       const errorMsg = `Cannot rename: Desired name is empty.`;
+     if (!desiredNewName || typeof desiredNewName !== 'string' || desiredNewName.trim().length === 0) {
+       const errorMsg = `Cannot rename: Desired name is empty or invalid.`;
        console.error(errorMsg); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
+       toast.error("Rename Error", { description: "Filename cannot be empty." });
        resetInputState(index, originalFileLocation); // Reset input
        return;
     }
-    const ext = path.extname(resultToRename.originalName || originalFileLocation); // Get extension
-    const sanitizedDesiredBaseName = sanitizeFilename(desiredNewName);
-     if (!sanitizedDesiredBaseName) {
-       const errorMsg = `Cannot rename: Sanitized name is empty for desired name "${desiredNewName}".`;
+    // Extract the extension from the *current* file location
+    const ext = path.extname(originalFileLocation); 
+    // Sanitize the desired base name from the input
+    const sanitizedDesiredBaseName = sanitizeFilename(desiredNewName); 
+     if (!sanitizedDesiredBaseName || sanitizedDesiredBaseName.trim().length === 0) {
+       const errorMsg = `Cannot rename: Sanitized name is empty or invalid for desired name "${desiredNewName}".`;
        console.error(errorMsg); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
        toast.error("Rename Error", { description: "Invalid characters in filename." }); // Use sonner
        resetInputState(index, originalFileLocation); // Reset input
@@ -187,7 +193,8 @@ export default function ResultsComponent({
       if (renameOpResult.success && renameOpResult.newPath) {
         // SUCCESS: Update state with the actual new path and derived name
         const actualNewAbsolutePath = renameOpResult.newPath;
-        const actualNewExt = path.extname(actualNewAbsolutePath);
+        // Derive the actual base name from the path returned by IPC (handles conflicts like "(1)")
+        const actualNewExt = path.extname(actualNewAbsolutePath); 
         const actualNewBaseName = path.basename(actualNewAbsolutePath, actualNewExt);
 
         setEditableResults(currentResults =>
@@ -196,7 +203,7 @@ export default function ResultsComponent({
                 ? {
                     ...res,
                     fileLocation: actualNewAbsolutePath, // Update the stored absolute path
-                    newName: actualNewBaseName,         // Update the display name
+                    newName: actualNewBaseName,         // Update the display name to the actual resulting base name
                   }
                 : res
             )
