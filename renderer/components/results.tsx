@@ -251,11 +251,6 @@ export default function ResultsComponent({
 
     window.ipc.log(`[ResultsComponent renameFileOnAction index ${index}] Calling IPC resolveAndRename: originalPath="${originalFileLocation}", baseName="${sanitizedDesiredBaseName}", ext="${ext}"`);
     
-    // Add a loading toast
-    const toastId = toast.loading("Renaming file...", {
-      description: `${sanitizedDesiredBaseName}${ext}`
-    });
-
     try {
       const renameOpResult = await window.ipc.resolveAndRename(
         originalFileLocation,
@@ -288,18 +283,12 @@ export default function ResultsComponent({
             )
         );
         window.ipc.log(`[ResultsComponent renameFileOnAction index ${index}] State updated successfully. New path: "${actualNewAbsolutePath}", Display name: "${actualNewBaseName}"`);
-        toast.success("Rename Successful", {
-          id: toastId, // Update the loading toast
-          description: `Renamed to ${actualNewBaseName}`
-        });
-
+        
       } else {
         // FAILURE reported by IPC: Log, notify, reset input state
         const errorMsg = `Failed to rename file via IPC: ${renameOpResult.error || 'Unknown IPC error'}`; 
         console.error(errorMsg); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
         toast.error("Rename Failed", {
-          id: toastId, // Update the loading toast
-          // Show just the basename and error
           description: `${currentFileName}: ${renameOpResult.error || 'Could not rename the file.'}` 
         });
         resetInputState(index, originalFileLocation); // Reset input to original basename
@@ -308,7 +297,6 @@ export default function ResultsComponent({
       const errorMsg = `Error calling resolveAndRename IPC: ${error.message}`;
       console.error(errorMsg, error); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
       toast.error("Rename Error", {
-          id: toastId,
           description: `Failed to rename: ${error.message}`
       });
       resetInputState(index, originalFileLocation); // Reset input state
