@@ -55,7 +55,7 @@ export async function processFiles(files: File[], selectedModel = "gemini-pro", 
           
           // Extract just the basename for display after rename
           const finalDisplayName = renameResult?.success && renameResult.newPath 
-            ? path.basename(renameResult.newPath, path.extname(renameResult.newPath))
+            ? renameResult.newPath.replace(/^.*[\\\/]/, '').replace(/\.[^/.]+$/, "")
             : sanitizedDefaultName;
             
           window.ipc.log(`[processFiles loop fallback] Result: success=${renameResult?.success}, displayName="${finalDisplayName}"`);
@@ -94,18 +94,20 @@ export async function processFiles(files: File[], selectedModel = "gemini-pro", 
               window.ipc.log(`[processFiles loop i=${i}] Rename successful. New path: "${operationResult.newPath}"`);
               currentSourcePath = operationResult.newPath; // Update source for potential duplicates
               finalAbsolutePath = operationResult.newPath;
-              // Use the sanitized name as the display name initially
-              finalDisplayName = sanitizedBaseName; 
+              // Extract just the basename for display (without path or extension)
+              finalDisplayName = operationResult.newPath.replace(/^.*[\\\/]/, '').replace(/\.[^/.]+$/, "");
+              window.ipc.log(`[processFiles loop i=${i}] Extracted display name: "${finalDisplayName}"`);
             } else {
                console.error(`Failed to rename ${currentSourcePath} to ${sanitizedBaseName}, skipping duplicates.`);
                window.ipc.log(`[processFiles loop i=${i}] Rename FAILED for filePath="${currentSourcePath}", desiredName="${sanitizedBaseName}". Error: ${operationResult?.error}`);
-               // If rename fails, create a failure result but keep original info
-               results.push({
-                   success: false,
-                   originalName: fileName,
-                   newName: nameFromAI, // Show the name AI intended
-                   fileLocation: currentSourcePath // Original path before failed rename
-               });
+                // If rename fails, create a failure result but keep original info
+                results.push({
+                    success: false,
+                    originalName: fileName,
+                    // Just use the basic sanitized name from AI without any path components
+                    newName: nameFromAI.includes('/') || nameFromAI.includes('\\') ? nameFromAI.replace(/^.*[\\\/]/, '') : nameFromAI,
+                    fileLocation: currentSourcePath // Original path before failed rename
+                });
                break; // Exit loop for this file if first rename fails
             }
           } else {
@@ -127,8 +129,9 @@ export async function processFiles(files: File[], selectedModel = "gemini-pro", 
              if (operationResult?.success && operationResult.newPath) {
                fileNewFiles++;
                finalAbsolutePath = operationResult.newPath;
-               // Use the sanitized name as the display name initially
-               finalDisplayName = sanitizedBaseName; 
+               // Extract just the basename for display (without path or extension)
+               finalDisplayName = operationResult.newPath.replace(/^.*[\\\/]/, '').replace(/\.[^/.]+$/, "");
+               window.ipc.log(`[processFiles loop i=${i}] Extracted display name for duplicate: "${finalDisplayName}"`);
                // Note: currentSourcePath remains the same for subsequent duplicates *from the original (now potentially renamed) file*
              } else {
                console.error(`Failed to duplicate file to ${desiredTargetPath}`);
@@ -137,7 +140,8 @@ export async function processFiles(files: File[], selectedModel = "gemini-pro", 
                 results.push({
                     success: false,
                     originalName: fileName,
-                    newName: nameFromAI, // Show the name AI intended
+                    // Just use the basic sanitized name from AI without any path components
+                    newName: nameFromAI.includes('/') || nameFromAI.includes('\\') ? nameFromAI.replace(/^.*[\\\/]/, '') : nameFromAI,
                     fileLocation: currentSourcePath // Original path before failed duplicate
                 });
                break; // Stop processing this file if duplication fails
@@ -146,19 +150,16 @@ export async function processFiles(files: File[], selectedModel = "gemini-pro", 
 
           // Add result only if the operation was successful (or handled above for failure)
           if (operationResult?.success && finalAbsolutePath && finalDisplayName) {
-              // Extract the actual base name from the final path in case of conflicts (e.g., "(1)" was added)
-              const finalActualBaseName = path.basename(finalAbsolutePath, path.extname(finalAbsolutePath));
-
               results.push({
                 success: true,
                 originalName: fileName, // Always the original drop name
-                // Use the actual final base name for display
-                newName: finalActualBaseName, 
+                // Use the sanitized basename without path components for display
+                newName: finalDisplayName, 
                 // Store the final absolute path
                 fileLocation: finalAbsolutePath 
               });
               
-              window.ipc.log(`[processFiles loop i=${i}] Added result: newName="${finalActualBaseName}", fileLocation="${finalAbsolutePath}"`);
+              window.ipc.log(`[processFiles loop i=${i}] Added result: newName="${finalDisplayName}", fileLocation="${finalAbsolutePath}"`);
           }
         } // End for loop
 

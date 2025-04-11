@@ -41,19 +41,20 @@ export default function ResultsComponent({
         let initialDisplayName = 'Unknown';
         
         if (result.newName && typeof result.newName === 'string') {
-          // Prefer the newName from the API result if it exists and is valid
-          initialDisplayName = result.newName;
-          window.ipc.log(`[ResultsComponent useEffect] Result #${idx} using provided newName: "${initialDisplayName}"`);
+          // If the newName contains a path separator (/ or \), extract just the filename portion
+          initialDisplayName = result.newName.replace(/^.*[\\\/]/, ''); // Extract filename from path
+          window.ipc.log(`[ResultsComponent useEffect] Result #${idx} extracted from newName: "${initialDisplayName}"`);
         } else if (result.fileLocation && typeof result.fileLocation === 'string') {
-          // Fall back to extracting from fileLocation if needed
-          const currentExt = path.extname(result.fileLocation);
-          initialDisplayName = path.basename(result.fileLocation, currentExt);
-          window.ipc.log(`[ResultsComponent useEffect] Result #${idx} derived name from fileLocation: "${initialDisplayName}"`);
+          // Extract just the filename portion from the absolute path
+          initialDisplayName = result.fileLocation.replace(/^.*[\\\/]/, '');
+          // Also remove the extension from the display name
+          initialDisplayName = initialDisplayName.replace(/\.[^/.]+$/, "");
+          window.ipc.log(`[ResultsComponent useEffect] Result #${idx} extracted from fileLocation: "${initialDisplayName}"`);
         } else {
-          // Last resort: use originalName's basename
-          const fallbackExt = path.extname(result.originalName || 'Unknown');
-          initialDisplayName = path.basename(result.originalName || 'Unknown', fallbackExt);
-          window.ipc.log(`[ResultsComponent useEffect] Result #${idx} using basename from originalName: "${initialDisplayName}"`);
+          // Last resort: extract from originalName
+          initialDisplayName = result.originalName ? result.originalName.replace(/^.*[\\\/]/, '') : 'Unknown';
+          initialDisplayName = initialDisplayName.replace(/\.[^/.]+$/, ""); // Remove extension
+          window.ipc.log(`[ResultsComponent useEffect] Result #${idx} extracted from originalName: "${initialDisplayName}"`);
         }
 
         return {
@@ -64,7 +65,6 @@ export default function ResultsComponent({
       }).filter(result => result.fileLocation); // Keep filtering based on fileLocation presence
 
       window.ipc.log(`[ResultsComponent useEffect] Initialized ${initialEditableResults.length} editable results.`);
-      // Log the first result for debugging
       if (initialEditableResults.length > 0) {
         const sample = initialEditableResults[0];
         window.ipc.log(`[ResultsComponent useEffect] Sample - newName: "${sample.newName}", fileLocation: "${sample.fileLocation}"`);
@@ -92,22 +92,46 @@ export default function ResultsComponent({
 
   // Open the file's containing folder
   const openFile = useCallback(async (fileLocation: string) => {
-    if (!fileLocation || typeof fileLocation !== 'string' || !path.isAbsolute(fileLocation)) {
-       const errorMsg = `Cannot open file: Invalid or non-absolute path provided: "${fileLocation}"`;
+    window.ipc.log(`[ResultsComponent openFile] Attempting to open fileLocation: "${fileLocation}"`);
+    
+    if (!fileLocation || typeof fileLocation !== 'string') {
+       const errorMsg = `Cannot open file: Invalid or missing path: "${fileLocation}"`;
        console.error(errorMsg);
        window.ipc.log(`[ResultsComponent] ${errorMsg}`);
-       toast.error("Error Opening File", { description: "Cannot open file location: Invalid path." });
+       toast.error("Error Opening File", { description: "Cannot open file: Invalid path." });
        return;
+    }
+
+    // Check if the path is absolute (Windows or Unix style)
+    const isWindowsPath = /^([a-z]:|\\\\)/i.test(fileLocation);
+    const isUnixPath = fileLocation.startsWith('/');
+    
+    if (!isWindowsPath && !isUnixPath) {
+      const errorMsg = `Cannot open file: Path is not absolute: "${fileLocation}"`;
+      console.error(errorMsg);
+      window.ipc.log(`[ResultsComponent] ${errorMsg}`);
+      toast.error("Error Opening File", { description: "Cannot open file: Not an absolute path." });
+      return;
     }
 
     window.ipc.log(`[ResultsComponent] Requesting to open file location: "${fileLocation}"`);
     try {
-      const result = await window.ipc.openFile(fileLocation); // Assumes openFile opens the directory/file
+      // First check if the file exists
+      const existsResult = await window.ipc.checkFileExists(fileLocation);
+      if (!existsResult.exists) {
+        window.ipc.log(`[ResultsComponent openFile] File doesn't exist at path: "${fileLocation}"`);
+        toast.error("Error Opening File", { description: `File not found at location.` });
+        return;
+      }
+
+      const result = await window.ipc.openFile(fileLocation);
       if (!result.success) {
         const errorMsg = `Failed to open file location "${fileLocation}": ${result.error || 'Unknown error'}`;
         console.error(errorMsg);
         window.ipc.log(`[ResultsComponent] ${errorMsg}`);
         toast.error("Error Opening File", { description: result.error || 'Could not open the file location.' });
+      } else {
+        window.ipc.log(`[ResultsComponent] Successfully opened file: "${fileLocation}"`);
       }
     } catch (error: any) {
       const errorMsg = `Error opening file location "${fileLocation}": ${error.message}`;
@@ -115,7 +139,7 @@ export default function ResultsComponent({
       window.ipc.log(`[ResultsComponent] ${errorMsg}`);
       toast.error("Error", { description: "An unexpected error occurred while trying to open the file location." });
     }
-  }, [toast]); // Include toast if used
+  }, []);
 
 
   // Handle Enter/Escape keys in the input
@@ -150,15 +174,23 @@ export default function ResultsComponent({
     const originalFileLocation = resultToRename.fileLocation; // The current absolute path from state
     const desiredNewName = resultToRename.newName; // The name typed into the input (base name only)
 
-    window.ipc.log(`[ResultsComponent renameFileOnAction index ${index}] Initiating. Original path: "${originalFileLocation}", Desired base name: "${desiredNewName}"`);
+    window.ipc.log(`[ResultsComponent renameFileOnAction index ${index}] Initiating. Original path: "${originalFileLocation}", Typed name: "${desiredNewName}"`);
 
     // --- Pre-IPC Validation ---
-    if (!originalFileLocation || typeof originalFileLocation !== 'string' || !path.isAbsolute(originalFileLocation)) {
-       const errorMsg = `Cannot rename: Invalid or non-absolute original file location state: "${originalFileLocation}"`;
+    if (!originalFileLocation || typeof originalFileLocation !== 'string') {
+       const errorMsg = `Cannot rename: Missing or invalid original file location: "${originalFileLocation}"`;
        console.error(errorMsg); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
        toast.error("Rename Error", { description: `Invalid file path.` }); 
-       resetInputState(index, originalFileLocation); // Reset input on validation failure
        return;
+    }
+
+    // Check if the path is absolute (starts with drive letter or UNC path)
+    const isAbsolutePath = /^([a-z]:|\\\\)/i.test(originalFileLocation);
+    if (!isAbsolutePath) {
+      const errorMsg = `Cannot rename: Not an absolute path: "${originalFileLocation}"`;
+      console.error(errorMsg); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
+      toast.error("Rename Error", { description: `Invalid file path format.` }); 
+      return;
     }
 
     // First check if the file exists at the current location
@@ -183,8 +215,19 @@ export default function ResultsComponent({
        resetInputState(index, originalFileLocation); // Reset input
        return;
     }
-    // Extract the extension from the *current* file location
-    const ext = path.extname(originalFileLocation); 
+
+    // *** Make sure input is just the filename without path separators ***
+    if (desiredNewName.includes('\\') || desiredNewName.includes('/')) {
+      const errorMsg = `Cannot rename: Filename cannot contain path separators: "${desiredNewName}"`;
+      console.error(errorMsg); window.ipc.log(`[ResultsComponent] ${errorMsg}`);
+      toast.error("Rename Error", { description: "Filename cannot contain path separators." });
+      resetInputState(index, originalFileLocation);
+      return;
+    }
+    
+    // Extract the extension from the *current* file location using regex
+    const ext = originalFileLocation.match(/\.[^/.\\]+$/)?.[0] || "";
+    
     // Sanitize the desired base name from the input
     const sanitizedDesiredBaseName = sanitizeFilename(desiredNewName); 
     if (!sanitizedDesiredBaseName || sanitizedDesiredBaseName.trim().length === 0) {
@@ -194,12 +237,15 @@ export default function ResultsComponent({
        resetInputState(index, originalFileLocation); // Reset input
        return;
     }
-     // Optional: Check if name actually changed (ignoring case might be useful)
-     const originalBaseName = path.basename(originalFileLocation, path.extname(originalFileLocation));
-     if (originalBaseName === sanitizedDesiredBaseName) {
-         window.ipc.log(`[ResultsComponent renameFileOnAction index ${index}] Rename skipped: Name unchanged.`);
-         return; // No need to call IPC if the name didn't change
-     }
+     
+    // Get current filename from path for comparison
+    const currentFileName = originalFileLocation.replace(/^.*[\\\/]/, '');
+    const currentBaseName = currentFileName.replace(/\.[^/.]+$/, "");
+    
+    if (currentBaseName === sanitizedDesiredBaseName) {
+      window.ipc.log(`[ResultsComponent renameFileOnAction index ${index}] Rename skipped: Name unchanged.`);
+      return; // No need to call IPC if the name didn't change
+    }
     // --- End Validation ---
 
 
@@ -223,9 +269,12 @@ export default function ResultsComponent({
       if (renameOpResult.success && renameOpResult.newPath) {
         // SUCCESS: Update state with the actual new path and derived name
         const actualNewAbsolutePath = renameOpResult.newPath;
-        // Derive the actual base name from the path returned by IPC (handles conflicts like "(1)")
-        const actualNewExt = path.extname(actualNewAbsolutePath); 
-        const actualNewBaseName = path.basename(actualNewAbsolutePath, actualNewExt);
+        
+        // Extract just the filename without path or extension using regex
+        const actualNewFileName = actualNewAbsolutePath.replace(/^.*[\\\/]/, '');
+        const actualNewBaseName = actualNewFileName.replace(/\.[^/.]+$/, "");
+
+        window.ipc.log(`[ResultsComponent renameFileOnAction index ${index}] Extracted new basename: "${actualNewBaseName}" from path: "${actualNewAbsolutePath}"`);
 
         setEditableResults(currentResults =>
             currentResults.map((res, i) =>
@@ -251,7 +300,7 @@ export default function ResultsComponent({
         toast.error("Rename Failed", {
           id: toastId, // Update the loading toast
           // Show just the basename and error
-          description: `${path.basename(originalFileLocation)}: ${renameOpResult.error || 'Could not rename the file.'}` 
+          description: `${currentFileName}: ${renameOpResult.error || 'Could not rename the file.'}` 
         });
         resetInputState(index, originalFileLocation); // Reset input to original basename
       }
@@ -264,7 +313,7 @@ export default function ResultsComponent({
       });
       resetInputState(index, originalFileLocation); // Reset input state
    }
- }, [editableResults, editingIndex]); // Remove resetInputState from dependencies to avoid circular reference
+ }, [editableResults, editingIndex]); // Remove resetInputState from dependencies
 
   // --- Helper Functions ---
 
@@ -272,9 +321,9 @@ export default function ResultsComponent({
   const resetInputState = useCallback((index: number, currentFileLocation: string) => {
      if (!currentFileLocation || typeof currentFileLocation !== 'string') return; // Safety check
      
-     // Always extract just the basename, never use the full path
-     const currentExt = path.extname(currentFileLocation);
-     const currentBaseName = path.basename(currentFileLocation, currentExt);
+     // Extract just the filename without path or extension using regex
+     // This handles both forward and backslashes for cross-platform compatibility
+     const currentBaseName = currentFileLocation.replace(/^.*[\\\/]/, '').replace(/\.[^/.]+$/, "");
      
      window.ipc.log(`[ResultsComponent resetInputState] Index ${index}: Resetting to basename "${currentBaseName}" from "${currentFileLocation}"`);
      
