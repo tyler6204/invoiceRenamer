@@ -219,16 +219,17 @@ ipcMain.handle('resolve-and-rename', async (_, originalFilePath: string, desired
     } // End while loop
 
     // --- Perform Rename ---
-    logToFile(`[resolve-and-rename] Attempting rename: "${originalFilePath}" -> "${fullNewPath}"`);
+    logToFile(`[resolve-and-rename] Final path determined: "${fullNewPath}"`);
+    // *** ENSURE THIS LOG IS PRESENT ***
+    logToFile(`[resolve-and-rename] CONFIRMING rename call: fs.rename("${originalFilePath}", "${fullNewPath}")`);
     await fs.promises.rename(originalFilePath, fullNewPath);
     logToFile(`[resolve-and-rename] Rename successful.`);
-    return { success: true, newPath: fullNewPath }; // Return the final absolute path
+    return { success: true, newPath: fullNewPath };
 
   } catch (error: any) {
     console.error('[resolve-and-rename] Error:', error);
-    logToFile(`[resolve-and-rename] Failed. Error: ${error.message}. Original: "${originalFilePath}", Desired: "${desiredNewBaseName}${fileExtension}"`);
-    // Return details for debugging in renderer
-    return { success: false, error: error.message, originalPath: originalFilePath, attemptedPath: desiredNewBaseName + fileExtension };
+    logToFile(`[resolve-and-rename] Failed. Error: ${error.message}. Original: "${originalFilePath}", Target Attempt: "${fullNewPath}"`); // Log target attempt too
+    return { success: false, error: error.message, originalPath: originalFilePath, attemptedPath: fullNewPath }; // Return attemptedPath
   }
 });
 
@@ -309,18 +310,6 @@ ipcMain.handle('install-update', () => {
   }
   return { success: false, message: 'Update manager not initialized' }
 })
-// --- End Update Handlers ---
-
-// Deprecated Handlers (Remove or comment out if no longer used)
-/*
-ipcMain.handle('rename-file', async (_, oldPath, newPath) => {
-  // ... This is now handled by resolve-and-rename ...
-});
-
-ipcMain.handle('duplicate-file', async (_, sourcePath, targetPath) => {
-  // ... This is now handled by resolve-and-duplicate ...
-});
-*/
 
 // Keep the message handler if needed for other things
 ipcMain.on('message', async (event, arg) => {

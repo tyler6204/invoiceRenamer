@@ -2,7 +2,7 @@
   "private": true,
   "name": "invoice-renamer",
   "description": "This tool renames invoices to a more readable format for accounting purposes.",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "author": "Tyler Yust <tyler@yusttech.com>",
   "main": "app/background.js",
   "repository": "https://github.com/tyler6204/invoiceRenamer",
@@ -14,17 +14,11 @@
   },
   "scripts": {
     "dev": "nextron",
-
     "build": "nextron build",
-
     "build-mac": "nextron build && cross-env $(grep -v '^#' .env | xargs) electron-builder --mac",
-
     "build-win": "nextron build && cross-env $(grep -v '^#' .env | xargs) electron-builder --win --x64",
-
     "build-all": "nextron build && cross-env $(grep -v '^#' .env | xargs) electron-builder --mac --win --x64",
-
     "publish": "nextron build && cross-env $(grep -v '^#' .env | xargs) electron-builder --mac --win --x64 --publish always",
-
     "postinstall": "electron-builder install-app-deps"
   },
   "extraFiles": [
@@ -79,6 +73,7 @@
     "react-dom": "^19.1.0",
     "react-dropzone": "^14.3.8",
     "react-icons": "^5.5.0",
+    "sonner": "^2.0.3",
     "spawn-sync": "^2.0.0",
     "tailwind-merge": "^3.0.2",
     "tailwind-to-css": "^0.0.6",

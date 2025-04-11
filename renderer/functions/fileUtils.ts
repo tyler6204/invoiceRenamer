@@ -1,6 +1,4 @@
-// src/renderer/functions/fileUtils.ts OR wherever this file lives
-
-// Only keep sanitizeFilename here, remove renameFileWithConflictResolution
+// src/functions/fileUtils.ts
 
 // Make sure sanitizeFilename is defined correctly
 export function sanitizeFilename(name: string): string {
@@ -16,5 +14,4 @@ export function sanitizeFilename(name: string): string {
   return sanitized || 'invalid_name'; // Ensure not empty
 }
 
-// The renameFileWithConflictResolution function is REMOVED from this file.
-// Its logic is now inside the 'resolve-and-rename' IPC handler in background.ts.
+// NO other functions should be in this file for the renderer.

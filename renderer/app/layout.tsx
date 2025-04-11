@@ -3,6 +3,8 @@ import '@/styles/globals.css'
 
 import { cn } from '@/lib/utils'
 import { Metadata } from 'next'
+import { Toaster } from "@/components/ui/sonner"
+
 export const metadata: Metadata = {
   title: 'Invoice Renamer',
   description:
@@ -23,6 +25,7 @@ export default function RootLayout({
           'bg-background min-h-screen font-sans antialiased',
         )}>
         {children}
+        <Toaster/>
       </body>
     </html>
   )
