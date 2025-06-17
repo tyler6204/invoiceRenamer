@@ -45,9 +45,6 @@ export async function processFiles(
 
       try {
         filePath = window.ipc.getPathForFile(file);
-        window.ipc.log(
-          `[processFiles loop] File: "${fileName}", Got path from IPC: "${filePath}", Type: ${typeof filePath}`
-        );
 
         if (!filePath || typeof filePath !== "string") {
           throw new Error(
@@ -68,10 +65,6 @@ export async function processFiles(
           const ext = path.extname(fileName);
           const sanitizedDefaultName = sanitizeFilename(defaultName);
 
-          window.ipc.log(
-            `[processFiles loop fallback] Calling resolveAndRename with filePath="${filePath}", sanitizedDefaultName="${sanitizedDefaultName}", ext="${ext}"`
-          );
-
           // *** USE NEW IPC HANDLER ***
           const renameResult = await window.ipc.resolveAndRename(
             filePath,
@@ -86,10 +79,6 @@ export async function processFiles(
                   .replace(/^.*[\\\/]/, "")
                   .replace(/\.[^/.]+$/, "")
               : sanitizedDefaultName;
-
-          window.ipc.log(
-            `[processFiles loop fallback] Result: success=${renameResult?.success}, displayName="${finalDisplayName}"`
-          );
 
           results.push({
             success: renameResult?.success ?? false,
@@ -116,10 +105,6 @@ export async function processFiles(
 
           if (i === 0) {
             // --- Rename original file ---
-            window.ipc.log(
-              `[processFiles loop i=${i}] Calling resolveAndRename with filePath="${currentSourcePath}", sanitizedBaseName="${sanitizedBaseName}", ext="${ext}"`
-            );
-
             // *** USE NEW IPC HANDLER ***
             operationResult = await window.ipc.resolveAndRename(
               currentSourcePath,
@@ -128,18 +113,12 @@ export async function processFiles(
             );
 
             if (operationResult?.success && operationResult.newPath) {
-              window.ipc.log(
-                `[processFiles loop i=${i}] Rename successful. New path: "${operationResult.newPath}"`
-              );
               currentSourcePath = operationResult.newPath; // Update source for potential duplicates
               finalAbsolutePath = operationResult.newPath;
               // Extract just the basename for display (without path or extension)
               finalDisplayName = operationResult.newPath
                 .replace(/^.*[\\\/]/, "")
                 .replace(/\.[^/.]+$/, "");
-              window.ipc.log(
-                `[processFiles loop i=${i}] Extracted display name: "${finalDisplayName}"`
-              );
             } else {
               console.error(
                 `Failed to rename ${currentSourcePath} to ${sanitizedBaseName}, skipping duplicates.`
@@ -162,29 +141,15 @@ export async function processFiles(
             }
           } else {
             // --- Duplicate file for additional invoices ---
-            window.ipc.log(
-              `[processFiles loop i=${i}] Creating New File from sourcePath: "${currentSourcePath}"`
-            );
-
             const targetDir = path.dirname(currentSourcePath);
             // Use sanitized name + extension for the target filename
             const targetFileName = sanitizedBaseName + ext;
             const desiredTargetPath = path.join(targetDir, targetFileName);
 
-            window.ipc.log(
-              `[processFiles loop i=${i}] Calling resolveAndDuplicate with sourcePath="${currentSourcePath}", desiredTargetPath="${desiredTargetPath}"`
-            );
-
             // *** USE NEW IPC HANDLER ***
             operationResult = await window.ipc.resolveAndDuplicate(
               currentSourcePath,
               desiredTargetPath
-            );
-
-            window.ipc.log(
-              `[processFiles loop i=${i}] Duplicate response: ${JSON.stringify(
-                operationResult
-              )}`
             );
 
             if (operationResult?.success && operationResult.newPath) {
@@ -194,10 +159,6 @@ export async function processFiles(
               finalDisplayName = operationResult.newPath
                 .replace(/^.*[\\\/]/, "")
                 .replace(/\.[^/.]+$/, "");
-              window.ipc.log(
-                `[processFiles loop i=${i}] Extracted display name for duplicate: "${finalDisplayName}"`
-              );
-              // Note: currentSourcePath remains the same for subsequent duplicates *from the original (now potentially renamed) file*
             } else {
               console.error(`Failed to duplicate file to ${desiredTargetPath}`);
               window.ipc.log(
@@ -232,10 +193,6 @@ export async function processFiles(
               // Store the final absolute path
               fileLocation: finalAbsolutePath,
             });
-
-            window.ipc.log(
-              `[processFiles loop i=${i}] Added result: newName="${finalDisplayName}", fileLocation="${finalAbsolutePath}"`
-            );
           }
         } // End for loop
 
@@ -255,9 +212,6 @@ export async function processFiles(
         const fallbackBaseName = path.basename(
           fileName,
           path.extname(fileName)
-        );
-        window.ipc.log(
-          `[processFiles loop ERROR] Creating fallback result with newName="${fallbackBaseName}"`
         );
 
         return {
@@ -282,18 +236,6 @@ export async function processFiles(
       totalNewFiles += result.newFiles;
     });
 
-    window.ipc.log(
-      `[processFiles] All processing complete. Returning ${allResults.length} results with ${totalNewFiles} new files.`
-    );
-
-    // Log a sample of the results for debugging
-    if (allResults.length > 0) {
-      const sample = allResults[0];
-      window.ipc.log(
-        `[processFiles] Sample result - originalName: "${sample.originalName}", newName: "${sample.newName}", fileLocation: "${sample.fileLocation}"`
-      );
-    }
-
     return { results: allResults, newFiles: totalNewFiles };
   } catch (error) {
     console.error("Error processing files:", error);
@@ -315,13 +257,6 @@ async function AIProcessFile(
   // ... (Keep the existing implementation) ...
   //Calls Gemini API to process file and returns array of invoice names
   try {
-    // Initialize the Gemini API with the API key
-    window.ipc.log(
-      `[AIProcessFile] Initialized Gemini with key ending in ${process.env.NEXT_PUBLIC_GEMINI_API_KEY?.slice(
-        -4
-      )}`
-    );
-
     // Get the model - use the selected model or default to gemini-pro
     const systemPrompt = getSystemPrompt(renamingSettings.company);
 
@@ -386,9 +321,6 @@ async function AIProcessFile(
     };
     const model = modelName;
 
-    window.ipc.log(
-      `[AIProcessFile] Sending request to model ${modelName} for file ${file.name} (type: ${mimeType})`
-    );
     // Send request with system prompt and user prompt
     const result = await ai.models.generateContent({
       model,
@@ -397,7 +329,6 @@ async function AIProcessFile(
     });
 
     const responseText = result.text;
-    window.ipc.log(`[AIProcessFile] Raw response from Gemini: ${responseText}`);
 
     // Parse the response - it should already be structured JSON
     let invoiceDataArray: InvoiceData[];
@@ -405,9 +336,6 @@ async function AIProcessFile(
       invoiceDataArray = JSON.parse(responseText);
       if (!Array.isArray(invoiceDataArray)) {
         // If it's not an array, wrap it in one, though the schema should prevent this.
-        window.ipc.log(
-          `[AIProcessFile] Warning: Gemini response was not an array, wrapping it.`
-        );
         invoiceDataArray = [invoiceDataArray];
       }
     } catch (error) {
@@ -425,9 +353,6 @@ async function AIProcessFile(
       try {
         // Use the imported formatInvoiceFilename helper function
         const formattedName = formatInvoiceFilename(invoice, renamingSettings);
-        window.ipc.log(
-          `[AIProcessFile] Formatted name for invoice ${index}: ${formattedName}`
-        );
         return formattedName;
       } catch (error) {
         console.error("Error formatting invoice filename:", error);
@@ -442,9 +367,6 @@ async function AIProcessFile(
 
     // Return the array of names, or ['Unknown'] if empty
     const finalNames = filenames.length > 0 ? filenames : ["Unknown"];
-    window.ipc.log(
-      `[AIProcessFile] Final generated names: ${JSON.stringify(finalNames)}`
-    );
     return finalNames;
   } catch (error) {
     console.error("Error in AI processing:", error);

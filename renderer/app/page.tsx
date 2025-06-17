@@ -36,19 +36,15 @@ export default function HomePage() {
     
     // Add error boundary effect
     useEffect(() => {
-        // Log component mount to help debug rendering issues
-        console.log('HomePage component mounted');
-        
-        // Log to both console and our custom logger if available
+        //MARK: Reduce noise – only forward important logs (errors, failures) to main process
         const log = (message: string) => {
-            console.log(message);
-            if (window.ipc?.log) {
-                window.ipc.log(message);
+            const lower = message.toLowerCase();
+            // Only forward error-related messages
+            if (lower.includes('error') || lower.includes('fail')) {
+                console.error(message);
+                window.ipc?.log?.(message);
             }
-        }
-        
-        log('Renderer process started');
-        log(`Environment: ${process.env.NODE_ENV}`);
+        };
         
         // Setup global error handler
         const errorHandler = (event: ErrorEvent) => {
@@ -60,12 +56,7 @@ export default function HomePage() {
         
         window.addEventListener('error', errorHandler);
         
-        // Test IPC is working
-        if (window.ipc) {
-            log('IPC is available');
-        } else {
-            log('IPC is NOT available - this indicates preload script issues');
-        }
+        // No further verbose start-up logs – keep UI clean
         
         return () => {
             window.removeEventListener('error', errorHandler);

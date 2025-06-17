@@ -70,7 +70,7 @@ export function formatInvoiceFilename(
   };
 
   // Format: [CompanyPrefix-]Vendor-Date-Amount
-  const vendor = data.vendor ? capitalizeWords(data.vendor) : "Unknown";
+  const vendor = data.vendor ? data.vendor : "Unknown";
   const date = data.date ? data.date.replace("/", "-") : "Unknown";
   const amount =
     typeof data.total === "number" && !isNaN(data.total)

@@ -12,17 +12,15 @@ export class UpdateManager {
   constructor(mainWindow: BrowserWindow, isProd: boolean) {
     this.mainWindow = mainWindow
     this.isProd = isProd
-    
     // Don't auto download - we'll let users decide when to update
     autoUpdater.autoDownload = true;
-    
     // Configure GitHub token for private repository access
       autoUpdater.setFeedURL({
         provider: 'github',
         owner: 'tyler6204',
         repo: 'invoiceRenamer',
         private: true,
-        token: process.env.NEXT_PUBLIC_GH_TOKEN
+        token: process.env.GH_TOKEN
       });
     this.setupEventHandlers()
   }
@@ -72,6 +70,7 @@ export class UpdateManager {
 
   // Check for updates
   checkForUpdates() {
+
     if (!this.isProd) {
       this.sendStatus('update-not-available', { message: 'Updates only available in production build' })
       
