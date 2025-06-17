@@ -184,8 +184,8 @@ export default function ResultsComponent({
        return;
     }
 
-    // Check if the path is absolute (starts with drive letter or UNC path)
-    const isAbsolutePath = /^([a-z]:|\\\\)/i.test(originalFileLocation);
+    // Use cross-platform absolute-path check
+    const isAbsolutePath = path.isAbsolute(originalFileLocation);
     if (!isAbsolutePath) {
       const errorMsg = `Cannot rename: Not an absolute path: "${originalFileLocation}"`;
       console.error(errorMsg); window.ipc.log(`[ResultsComponent] ${errorMsg}`);

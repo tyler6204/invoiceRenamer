@@ -1,5 +1,5 @@
-import { RenamingSettings } from '@/components/renamingSettings';
-import { Schema, SchemaType } from '@google/generative-ai';
+import { RenamingSettings } from "@/components/renamingSettings";
+import { Schema, Type } from "@google/genai";
 
 // Define the invoice data type
 export interface InvoiceData {
@@ -13,80 +13,91 @@ export interface InvoiceData {
 
 // Define the response schema using Google's Generative AI schema types
 const invoiceObjectSchema: Schema = {
-  type: SchemaType.OBJECT,
+  type: Type.OBJECT,
   properties: {
     vendor: {
-      type: SchemaType.STRING,
-      description: "Name of the vendor or company that issued the invoice"
+      type: Type.STRING,
+      description: "Name of the vendor or company that issued the invoice",
     },
     date: {
-      type: SchemaType.STRING,
-      description: "Invoice date in MM-DD-YYYY format"
+      type: Type.STRING,
+      description: "Invoice date in MM-DD-YYYY format",
     },
     total: {
-      type: SchemaType.NUMBER,
-      description: "Total invoice amount as a number without currency symbols"
+      type: Type.NUMBER,
+      description: "Total invoice amount as a number without currency symbols",
     },
     invoiceNumber: {
-      type: SchemaType.STRING,
-      description: "Unique invoice identifier"
+      type: Type.STRING,
+      description: "Unique invoice identifier",
     },
     isStatement: {
-      type: SchemaType.BOOLEAN,
-      description: "Whether the invoice is a statement or not"
+      type: Type.BOOLEAN,
+      description: "Whether the invoice is a statement or not",
     },
     creditCardNumber: {
-      type: SchemaType.STRING,
-      description: "The last 4 digits of the credit card number used to pay for the invoice formatted as X????"
-    }
+      type: Type.STRING,
+      description:
+        "The last 4 digits of the credit card number used to pay for the invoice formatted as X????",
+    },
   },
   // All fields are optional
-  required: []
+  required: [],
 };
 
 // Export the schema as an array to always get an array response
 export const geminiResponseSchema: Schema = {
-  type: SchemaType.ARRAY,
+  type: Type.ARRAY,
   items: invoiceObjectSchema,
-  description: "Array of invoice objects extracted from the document"
+  description: "Array of invoice objects extracted from the document",
 };
 
 // Helper to format invoice data into a standardized filename
-export function formatInvoiceFilename(data: InvoiceData, renamingSettings: RenamingSettings): string {
+export function formatInvoiceFilename(
+  data: InvoiceData,
+  renamingSettings: RenamingSettings
+): string {
   // Function to capitalize each word in a string
   const capitalizeWords = (str: string): string => {
-    return str.split(' ')
-      .map(word => word.toLowerCase().charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ');
+    return str
+      .split(" ")
+      .map(
+        (word) =>
+          word.toLowerCase().charAt(0).toUpperCase() +
+          word.slice(1).toLowerCase()
+      )
+      .join(" ");
   };
 
   // Format: [CompanyPrefix-]Vendor-Date-Amount
-  const vendor = data.vendor ? capitalizeWords(data.vendor) : 'Unknown';
-  const date = data.date ? data.date.replace('/', '-') : 'Unknown';
-  const amount = data.total ? data.total.toString() : 'Unknown';
+  const vendor = data.vendor ? capitalizeWords(data.vendor) : "Unknown";
+  const date = data.date ? data.date.replace("/", "-") : "Unknown";
+  const amount =
+    typeof data.total === "number" && !isNaN(data.total)
+      ? data.total.toFixed(2)
+      : "Unknown";
   const invoiceNumber = data.invoiceNumber;
-  const isStatement = data.isStatement
+  const isStatement = data.isStatement;
   const creditCardNumber = data.creditCardNumber;
 
   const parts = [];
 
-  if (renamingSettings.backup){
-    if (creditCardNumber){
+  if (renamingSettings.backup) {
+    if (creditCardNumber) {
       parts.push(amount, vendor, date, creditCardNumber);
-    }else{
+    } else {
       parts.push(amount, vendor, date, invoiceNumber, "Backup");
     }
-
-  }else{
+  } else {
     parts.push(amount, vendor, date);
-    if (isStatement){
+    if (isStatement) {
       parts.push("Statement");
-    }else if (invoiceNumber){
+    } else if (invoiceNumber) {
       parts.push(invoiceNumber);
-    }else if (creditCardNumber){
+    } else if (creditCardNumber) {
       parts.push(creditCardNumber);
     }
   }
-  
-  return parts.join(' ');
-} 
+
+  return parts.join(" ");
+}

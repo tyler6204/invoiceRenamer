@@ -1,6 +1,5 @@
 import { autoUpdater } from 'electron-updater'
 import { BrowserWindow } from 'electron'
-import { GH_TOKEN } from '../../renderer/lib/apiKeys'
 
 // Type for update event callbacks
 type UpdateStatusCallback = (status: string, data?: any) => void
@@ -10,7 +9,6 @@ export class UpdateManager {
   private statusCallback: UpdateStatusCallback
   private autoCheckInterval: NodeJS.Timeout | null = null
   private isProd: boolean
-
   constructor(mainWindow: BrowserWindow, isProd: boolean) {
     this.mainWindow = mainWindow
     this.isProd = isProd
@@ -24,7 +22,7 @@ export class UpdateManager {
         owner: 'tyler6204',
         repo: 'invoiceRenamer',
         private: true,
-        token: GH_TOKEN
+        token: process.env.NEXT_PUBLIC_GH_TOKEN
       });
     this.setupEventHandlers()
   }

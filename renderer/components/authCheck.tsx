@@ -12,7 +12,6 @@ import {
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Lock } from 'lucide-react';
-import { APP_PASSWORD } from '../lib/apiKeys';
 interface AuthCheckProps {
   children: React.ReactNode;
 }
@@ -22,7 +21,6 @@ export const AuthCheck: React.FC<AuthCheckProps> = ({ children }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showDialog, setShowDialog] = useState(true);
-
   useEffect(() => {
     // Check if we're already authenticated in this session
     const authState = localStorage.getItem('isAuthenticated');
@@ -35,8 +33,8 @@ export const AuthCheck: React.FC<AuthCheckProps> = ({ children }) => {
   const handleAuthenticate = async () => {
     try {
       // Get the correct password from the main process
-      const correctPassword = APP_PASSWORD
-
+      const correctPassword = process.env.NEXT_PUBLIC_APP_PASSWORD
+console.log(correctPassword, password)
       if (correctPassword === password) {
         setIsAuthenticated(true);
         setShowDialog(false);

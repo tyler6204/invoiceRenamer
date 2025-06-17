@@ -1,3 +1,4 @@
+"use client"
 import React, { useEffect } from 'react';
 import {
     Select,
@@ -39,7 +40,9 @@ export default function Header({ selectedModel, setSelectedModel }: HeaderProps)
         <header className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center space-x-2">   
                 <Image src="/images/logo.png" alt="Invoice Renamer" width={32} height={32} draggable={false} className="select-none pointer-events-none" />
-                <h1 className="text-2xl font-semibold">Invoice Renamer</h1>
+                <h1 onClick={() => {
+                    console.log('envKey', process.env.NEXT_PUBLIC_GEMINI_API_KEY);
+                }} className="text-2xl font-semibold">Invoice Renamer</h1>
             </div>
             <div className="flex items-center space-x-2">
                  <Select
