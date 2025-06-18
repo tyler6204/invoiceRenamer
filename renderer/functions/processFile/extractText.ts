@@ -124,8 +124,8 @@ async function extractTextFromImage(base64: string): Promise<OCRToken[]> {
     return {
       text: anno.description ?? "",
       coords: [
-        Number((centreX / maxX).toFixed(4)),
-        Number((centreY / maxY).toFixed(4)),
+        Number(((centreX / maxX) * 1000).toFixed(0)),
+        Number(((centreY / maxY) * 1000).toFixed(0)),
       ],
     };
   });
@@ -151,33 +151,39 @@ async function extractTextFromPdf(base64: string): Promise<OCRToken[]> {
 
     const allTokens: OCRToken[] = [];
 
-    //MARK: Process each page
-    for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-      const page = await pdfDoc.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better OCR
+    //MARK: Process all pages *in parallel* for improved performance
+    const pagePromises = Array.from({ length: pdfDoc.numPages }, (_, idx) =>
+      (async () => {
+        const pageNum = idx + 1;
+        const page = await pdfDoc.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better OCR
 
-      //MARK: Create off-screen canvas
-      const canvas = document.createElement("canvas");
-      const context = canvas.getContext("2d");
-      if (!context) continue;
+        //MARK: Create off-screen canvas for this page
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+        if (!context) return [] as OCRToken[]; // Skip if canvas context unavailable
 
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
 
-      //MARK: Render PDF page to canvas
-      const renderContext = {
-        canvasContext: context,
-        viewport: viewport,
-      };
+        // Render the current PDF page onto its canvas
+        await page.render({ canvasContext: context, viewport }).promise;
 
-      await page.render(renderContext).promise;
+        // Convert canvas to base64 PNG for Vision OCR
+        const base64Image = canvas
+          .toDataURL("image/png")
+          .replace(/^data:image\/png;base64,/, "");
 
-      //MARK: Convert canvas to base64 and OCR it
-      const imageData = canvas.toDataURL("image/png");
-      const base64Image = imageData.replace(/^data:image\/png;base64,/, "");
-      const pageTokens = await extractTextFromImage(base64Image);
-      allTokens.push(...pageTokens);
-    }
+        // OCR this page image and return its tokens
+        return extractTextFromImage(base64Image);
+      })()
+    );
+
+    // Wait for all pages to finish OCR concurrently
+    const tokenArrays = await Promise.all(pagePromises);
+
+    // Flatten the array-of-arrays into a single token list
+    tokenArrays.forEach((pageTokens) => allTokens.push(...pageTokens));
 
     return allTokens;
   } catch (error) {

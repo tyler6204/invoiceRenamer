@@ -228,12 +228,20 @@ export async function processFiles(
       }
     }); // End files.map
 
-    const processedResults = await Promise.all(processingPromises);
+    //MARK: Wait for all file-processing promises concurrently, tolerating individual failures
+    const settled = await Promise.allSettled(processingPromises);
+
     const allResults: Result[] = [];
     let totalNewFiles = 0;
-    processedResults.forEach((result) => {
-      allResults.push(...result.results);
-      totalNewFiles += result.newFiles;
+
+    settled.forEach((res, idx) => {
+      if (res.status === "fulfilled") {
+        allResults.push(...res.value.results);
+        totalNewFiles += res.value.newFiles;
+      } else {
+        // Log the rejection but continue aggregating other results
+        console.error(`File processing failed (index ${idx}):`, res.reason);
+      }
     });
 
     return { results: allResults, newFiles: totalNewFiles };
@@ -307,7 +315,7 @@ async function AIProcessFile(
 
     // Format each word with its bounding box coordinates inline
     const textWithCoords = tokens
-      .map((t) => `${t.text} [${t.coords[0]}, ${t.coords[1]}]`)
+      .map((t) => `${t.text} [${t.coords[0]} ${t.coords[1]}]`)
       .join(" ");
 
     const textPart: Part = {
