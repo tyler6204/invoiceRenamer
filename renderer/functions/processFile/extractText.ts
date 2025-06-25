@@ -17,6 +17,15 @@ export interface OCRToken {
   coords: [number, number];
 }
 
+//MARK: Types for Google Vision document structure (to avoid using `any`)
+type Vertex = { x?: number; y?: number };
+type BoundingPoly = { vertices?: Vertex[] };
+type OcrSymbol = { text?: string };
+type Word = { symbols?: OcrSymbol[]; boundingBox?: BoundingPoly };
+type Paragraph = { words?: Word[] };
+type Block = { paragraphs?: Paragraph[] };
+type Page = { blocks?: Block[] };
+
 /**
  * Extracts text from an image using Google Cloud Vision API.
  * @param imageDataBase64 The image data as a base64 string (data-URI header optional).
@@ -57,7 +66,7 @@ async function extractTextFromImage(base64: string): Promise<OCRToken[]> {
           content: base64, // supply raw base64 bytes
         },
         features: [
-          { type: "TEXT_DETECTION" }, // ask Vision for OCR results
+          { type: "DOCUMENT_TEXT_DETECTION" }, // ask Vision for OCR results
         ],
       },
     ],
@@ -84,7 +93,6 @@ async function extractTextFromImage(base64: string): Promise<OCRToken[]> {
     return [];
   }
   const responseJson = await response.json();
-  console.log(responseJson);
   const json = responseJson as {
     responses?: Array<{
       textAnnotations?: Array<{
@@ -95,14 +103,60 @@ async function extractTextFromImage(base64: string): Promise<OCRToken[]> {
     }>;
   };
 
-  const annotations = json.responses?.[0]?.textAnnotations ?? [];
-  const tokenAnnotations = annotations.slice(1); // index 0 is the entire text block
+  // Attempt to parse using fullTextAnnotation (more granular words)
+  const pages: Page[] =
+    (json.responses?.[0]?.fullTextAnnotation as { pages?: Page[] } | undefined)
+      ?.pages ?? [];
 
-  // Determine max extents to normalise coordinates
+  // Helper array to gather words with their bounding boxes
+  const words: Array<
+    { text: string; vertices: Array<{ x?: number; y?: number }> }
+  > = [];
+
+  //MARK: Extract words from the document structure if present
+  for (const page of pages) {
+    for (const block of (page.blocks ?? [])) {
+      for (const paragraph of (block.paragraphs ?? [])) {
+        for (const word of (paragraph.words ?? [])) {
+          const wordText = (word.symbols ?? []).map((symbol: OcrSymbol) =>
+            symbol.text ?? ""
+          ).join(
+            "",
+          );
+          words.push({
+            text: wordText,
+            vertices: word.boundingBox?.vertices ?? [],
+          });
+        }
+      }
+    }
+  }
+
+  // Fallback to textAnnotations slice(1) if document structure empty (older behaviour)
+  const fallbackTokenAnnotations =
+    json.responses?.[0]?.textAnnotations?.slice(1) ?? [];
+
+  if (words.length === 0 && fallbackTokenAnnotations.length === 0) {
+    return []; // No text detected at all
+  }
+
+  // Combine whichever source produced tokens
+  type RawToken = {
+    text: string;
+    vertices: Array<{ x?: number; y?: number }>;
+  };
+  const rawTokens: RawToken[] = words.length > 0
+    ? words
+    : fallbackTokenAnnotations.map((anno) => ({
+      text: anno.description ?? "",
+      vertices: anno.boundingPoly?.vertices ?? [],
+    }));
+
+  // Determine max extents for normalisation
   let maxX = 0;
   let maxY = 0;
-  for (const anno of tokenAnnotations) {
-    for (const v of anno.boundingPoly?.vertices ?? []) {
+  for (const tok of rawTokens) {
+    for (const v of tok.vertices) {
       if (v.x !== undefined) maxX = Math.max(maxX, v.x);
       if (v.y !== undefined) maxY = Math.max(maxY, v.y);
     }
@@ -110,10 +164,10 @@ async function extractTextFromImage(base64: string): Promise<OCRToken[]> {
   maxX = maxX || 1;
   maxY = maxY || 1;
 
-  const tokens: OCRToken[] = tokenAnnotations.map((anno) => {
-    const vertices = anno.boundingPoly?.vertices ?? [];
-    const xs = vertices.map((v) => v.x ?? 0);
-    const ys = vertices.map((v) => v.y ?? 0);
+  //MARK: Convert raw tokens to OCRToken with normalised centre coordinates
+  const tokens: OCRToken[] = rawTokens.map((tok) => {
+    const xs = tok.vertices.map((v) => v.x ?? 0);
+    const ys = tok.vertices.map((v) => v.y ?? 0);
     const minX = Math.min(...xs);
     const maxXv = Math.max(...xs);
     const minY = Math.min(...ys);
@@ -122,14 +176,14 @@ async function extractTextFromImage(base64: string): Promise<OCRToken[]> {
     const centreY = (minY + maxYv) / 2;
 
     return {
-      text: anno.description ?? "",
+      text: tok.text,
       coords: [
         Number(((centreX / maxX) * 1000).toFixed(0)),
         Number(((centreY / maxY) * 1000).toFixed(0)),
       ],
     };
   });
-  console.log(tokens);
+
   return tokens;
 }
 

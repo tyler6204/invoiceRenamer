@@ -114,9 +114,9 @@ export default function DragAndDrop({
       onDrop={handleDrop}
       onClick={handleClick}
       className={`
-        relative border-2 border-dashed rounded-xl p-6 text-center cursor-pointer 
+        relative border-2 border-dashed rounded-xl p-6 text-center 
         transition-all duration-200 ease-in-out
-        ${isProcessing ? 'opacity-50 cursor-not-allowed disabled' : `
+        ${isProcessing ? 'opacity-50 cursor-not-allowed disabled' : `cursor-pointer
           ${isDragActive ? 'border-primary bg-primary/5' : ''}
           ${!isDragActive ? 'hover:border-primary/50 hover:bg-muted/30' : ''}
         `}
@@ -150,7 +150,7 @@ export default function DragAndDrop({
         </div>
         
         <div className="space-y-2">
-          <h3 className="text-xl font-medium tracking-tight">
+          <h3 className="text-xl font-semibold tracking-tight">
             {isDragActive ? (
               'Drop to upload'
             ) : isProcessing ? (
